@@ -1,174 +1,223 @@
 // Tasks to perform each time a sheet is edited manually
 function onEdit(e) {
-  //hideClient(e);
-  updateDisplayPerDay();
-}
-
-// Tasks to perform each time a sheet structued is changed (e.g., dropdowns)
-//function onChange(e) {
-//  updateDisplayPerDay();
-//}
-
-// Tasks to perform each time a Google form injects data
-// function onFormSubmit(e) {
-//}
-
-// Separate orders per day and create a specific tab for each day
-function updateDisplayPerDay() {
-  const clientOrdersSheetName = 'commandes-clients'; // The client Order sheet name
-  const dashboardSheetName = 'dashboard'; // The dashboard sheet name
-  
-  // Get start and end dates from the dashboard sheet (cells A1 and A2)
-  const dashboardSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(dashboardSheetName);
-  const startDate = new Date(dashboardSheet.getRange('C3').getValue()); // Start Date
-  const endDate = new Date(dashboardSheet.getRange('C4').getValue());   // End Date
-  Logger.info(startDate)
-  Logger.info(endDate)
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(clientOrdersSheetName);
-  if (!sheet) {
-    Logger.log("Sheet not found!");
-    return;
+    //hideClient(e);
+    updateDisplayPerDay();
   }
-
-  // Get all data
-  const data = sheet.getDataRange().getValues();
-  if (data.length < 2) return; // No data
   
-  // Get header indexes
-  const headers = data[0];
-  const statutIndex = headers.indexOf("Statut");
-  const dateIndex = headers.indexOf("Commande pour ...");
-  const nameIndex = headers.indexOf("Nom");
-
-  if (statutIndex === -1 || dateIndex === -1 || nameIndex === -1) {
-    Logger.log("Required columns not found!");
-    return;
-  }
-
-  // Group orders by date
-  let ordersByDate = {};
-  let otherOrders = [];
-
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (row[statutIndex] !== "Validé") continue; // Skip if not "Validé"
+  // Tasks to perform each time a sheet structued is changed (e.g., dropdowns)
+  //function onChange(e) {
+  //  updateDisplayPerDay();
+  //}
+  
+  // Tasks to perform each time a Google form injects data
+  // function onFormSubmit(e) {
+  //}
+  
+  function updateDisplayPerDay() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+    const clientOrdersSheetName = 'commandes-clients';
+    const adminOrdersSheetName = 'commandes-admin';
+    const dashboardSheetName = 'dashboard';
+  
+    const dashboardSheet = ss.getSheetByName(dashboardSheetName);
+    const startDate = new Date(dashboardSheet.getRange('C3').getValue());
+    const endDate = new Date(dashboardSheet.getRange('C4').getValue());
+  
+    let ordersByDate = {};
+    let otherOrders = [];
+  
+    // Process commandes-clients (needs validation check)
+    processOrders(ss, clientOrdersSheetName, startDate, endDate, ordersByDate, otherOrders, true);
     
-    const orderDate = new Date(row[dateIndex]);
-    if (isNaN(orderDate)) continue; // Skip invalid dates
-    
-    if (orderDate >= startDate && orderDate <= endDate) {
-      const formattedTabName = formatTabName(orderDate);
-      if (!ordersByDate[formattedTabName]) ordersByDate[formattedTabName] = [];
-      ordersByDate[formattedTabName].push(row);
-    } else {
-      otherOrders.push(row);
+    // Process commandes-admin (always validated)
+    processOrders(ss, adminOrdersSheetName, startDate, endDate, ordersByDate, otherOrders, false);
+  
+    // Create & update specific date tabs
+    Object.keys(ordersByDate).forEach(tabName => {
+      updateSheet(ss, tabName, ordersByDate[tabName]);
+    });
+  
+    // Handle "autres" tab
+    if (otherOrders.length > 0) {
+      updateSheet(ss, "autres", otherOrders);
     }
   }
-
-  // Create & update the specific date tabs
-  Object.keys(ordersByDate).forEach(tabName => {
-    updateSheet(ss, tabName, ordersByDate[tabName], nameIndex);
-  });
-
-  // Handle "autres" tab
-  if (otherOrders.length > 0) {
-    otherOrders.sort((a, b) => a[dateIndex] - b[dateIndex] || a[nameIndex].localeCompare(b[nameIndex]));
-    updateSheet(ss, "autres", otherOrders, nameIndex);
-  }
-}
-
-// Hide clients when checkbox is selected
-function hideClient(e) {
-  var sheet = e.source.getActiveSheet();
-  var range = e.range;
   
-  // Column where checkboxes are (adjust the column index if necessary)
-  var checkboxColumn = 1;  // Column A (1 = Column A, 2 = Column B, etc.)
-
-  // Apply the filter when the edit is made in the checkbox column
-  if (range.getColumn() == checkboxColumn) {
-    var filter = sheet.getFilter();
+  function processOrders(ss, sheetName, startDate, endDate, ordersByDate, otherOrders, checkValidation) {
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      Logger.log(`Sheet ${sheetName} not found!`);
+      return;
+    }
+  
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) return;
+  
+    const headers = data[0];
+  
+    let isClientSheet = (sheetName === "commandes-clients");
+  
+    // Get column indexes based on sheet type
+    const dateIndex = headers.indexOf("Commande pour ...");
+    const nameIndex = headers.indexOf("Nom");
+    const emailIndex = headers.indexOf("Email");
+    const statutIndex = isClientSheet ? headers.indexOf("Statut") : -1; // Only exists in commandes-clients
+    const columnIndexes = {
+      "R": headers.indexOf("R"),
+      "P": headers.indexOf("P"),
+      "B": headers.indexOf("B"),
+      "F": headers.indexOf("F"),
+      "Po": headers.indexOf("Po"),
+      "Bac": headers.indexOf("Bac"),
+      "S": headers.indexOf("S"),
+      "C": headers.indexOf("C")
+    };
+  
+    if (dateIndex === -1 || nameIndex === -1 || emailIndex === -1) {
+      Logger.log(`Required columns not found in ${sheetName}!`);
+      return;
+    }
+  
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (isClientSheet && row[statutIndex] !== "Validé") continue; // Skip if not validated
+  
+      const orderDate = new Date(row[dateIndex]);
+      if (isNaN(orderDate)) continue;
+  
+      // Normalize data into the expected format
+      let formattedRow = [
+        row[emailIndex], // Email
+        row[nameIndex], // Nom
+        row[dateIndex], // Commande pour ...
+        row[columnIndexes["R"]],
+        row[columnIndexes["P"]],
+        row[columnIndexes["B"]],
+        row[columnIndexes["F"]],
+        row[columnIndexes["Po"]],
+        row[columnIndexes["Bac"]],
+        isClientSheet ? "" : row[columnIndexes["S"]], // S (empty for clients)
+        isClientSheet ? "" : row[columnIndexes["C"]]  // C (empty for clients)
+      ];
+  
+      if (orderDate >= startDate && orderDate <= endDate) {
+        const formattedTabName = formatTabName(orderDate);
+        if (!ordersByDate[formattedTabName]) ordersByDate[formattedTabName] = [];
+        ordersByDate[formattedTabName].push(formattedRow);
+      } else {
+        otherOrders.push(formattedRow);
+      }
+    }
+  }
+  
+  function updateSheet(ss, sheetName, data) {
+    let sheet = ss.getSheetByName(sheetName);
+    if (!sheet) sheet = createDaySheet(ss, sheetName);
+    sheet.clearContents();
+  
+    // Unified headers
+    const headers = ["Email", "Nom", "Commande pour ...", "R", "P", "B", "F", "Po", "Bac", "S", "C"];
+    sheet.appendRow(headers);
+  
+    // Sort data by name
+    data.sort(compareRows);
+  
+    // Add sorted rows
+    if (data.length > 0) {
+      let dataRange = sheet.getRange(2, 1, data.length, headers.length);
+      dataRange.setValues(data);
+    }
+  
+    // Apply styles
+    applySheetStyles(sheet, headers.length, data.length);
+  }
+  
+  // Helper function to sort rows by date and name
+  function compareRows(a, b) {
+    const dateA = a[2] || new Date(0); // Default to very old date if missing
+    const dateB = b[2] || new Date(0);
+    const nameA = a[1] ? String(a[1]) : "";
+    const nameB = b[1] ? String(b[1]) : "";
+  
+    Logger.log("Sorting: nameA = %s, nameB = %s", nameA, nameB);
+  
+    return dateA - dateB || nameA.localeCompare(nameB);
+  }
+  
+  function formatTabName(date) {
+    return Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+  
+  
+  
+  // Hide clients when checkbox is selected
+  function hideClient(e) {
+    var sheet = e.source.getActiveSheet();
+    var range = e.range;
     
-    // If the filter exists, modify it
-    if (filter) {
-      var criteria = SpreadsheetApp.newFilterCriteria()
-        .whenFormulaSatisfied('=NOT(A2=TRUE)')  // Formula to filter out checked rows (TRUE)
-        .build();
-      filter.setColumnFilterCriteria(checkboxColumn, criteria);  // Apply the filter to the checkbox column
-    } else {
-      // If no filter exists, create a new one with the criteria
-      sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).createFilter();
-      var newFilter = sheet.getFilter();
-      var criteria = SpreadsheetApp.newFilterCriteria()
-        .whenFormulaSatisfied('=NOT(A2=TRUE)')  // Formula to filter out checked rows (TRUE)
-        .build();
-      newFilter.setColumnFilterCriteria(checkboxColumn, criteria);  // Apply the filter to the checkbox column
+    // Column where checkboxes are (adjust the column index if necessary)
+    var checkboxColumn = 1;  // Column A (1 = Column A, 2 = Column B, etc.)
+  
+    // Apply the filter when the edit is made in the checkbox column
+    if (range.getColumn() == checkboxColumn) {
+      var filter = sheet.getFilter();
+      
+      // If the filter exists, modify it
+      if (filter) {
+        var criteria = SpreadsheetApp.newFilterCriteria()
+          .whenFormulaSatisfied('=NOT(A2=TRUE)')  // Formula to filter out checked rows (TRUE)
+          .build();
+        filter.setColumnFilterCriteria(checkboxColumn, criteria);  // Apply the filter to the checkbox column
+      } else {
+        // If no filter exists, create a new one with the criteria
+        sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).createFilter();
+        var newFilter = sheet.getFilter();
+        var criteria = SpreadsheetApp.newFilterCriteria()
+          .whenFormulaSatisfied('=NOT(A2=TRUE)')  // Formula to filter out checked rows (TRUE)
+          .build();
+        newFilter.setColumnFilterCriteria(checkboxColumn, criteria);  // Apply the filter to the checkbox column
+      }
     }
   }
-}
-
-// Utils functions
-/**
- * Format date into tab name (e.g., "ve07/03" for Friday, March 7)
- */
-function formatTabName(date) {
-  const days = ["di", "lu", "ma", "me", "je", "ve", "sa"];
-  const dayOfWeek = days[date.getDay()];
-  const day = ("0" + date.getDate()).slice(-2);
-  const month = ("0" + (date.getMonth() + 1)).slice(-2);
-  return `${dayOfWeek}${day}/${month}`;
-}
-
-/**
- * Create or update a sheet with given data, sorted alphabetically by "Nom"
- */
-function updateSheet(ss, sheetName, data, sortIndex) {
-  let sheet = ss.getSheetByName(sheetName);
-  if (!sheet) sheet = createDaySheet(ss, sheetName);
-  sheet.clearContents();
-
-  // Get headers from the original sheet
-  const mainSheet = ss.getSheetByName("commandes-clients");
-  const headers = mainSheet.getRange(1, 1, 1, mainSheet.getLastColumn()).getValues()[0];
-  sheet.appendRow(headers);
-
-  // Sort data by "Nom"
-  data.sort((a, b) => a[sortIndex].localeCompare(b[sortIndex]));
-
-  // Add sorted rows
-  let dataRange = sheet.getRange(2, 1, data.length, data[0].length);
-  dataRange.setValues(data);
-
-  // Apply styles
-  applySheetStyles(sheet, headers.length, data.length);
-}
-
-/**
- * Create a new sheet and return it
- */
-function createDaySheet(ss, sheetName) {
-  let sheet = ss.insertSheet(sheetName);
-  return sheet;
-}
-
-/**
- * Apply styling to the sheet: header, font size, alternating row colors
- */
-function applySheetStyles(sheet, numColumns, numRows) {
-  // Set font size for the entire sheet
-  sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).setFontSize(14);
-
-  // Style header: dark green background, white bold text
-  let headerRange = sheet.getRange(1, 1, 1, numColumns);
-  headerRange.setBackground("#0B6623").setFontColor("white").setFontWeight("bold");
-
-  // Apply alternating row colors (light green for every other row)
-  for (let i = 0; i < numRows; i++) {
-    if (i % 2 === 0) {
-      sheet.getRange(i + 2, 1, 1, numColumns).setBackground("#DFF2BF"); // Light green
+  
+  // Utils functions
+  /**
+   * Format date into tab name (e.g., "ve07/03" for Friday, March 7)
+   */
+  function formatTabName(date) {
+    const days = ["di", "lu", "ma", "me", "je", "ve", "sa"];
+    const dayOfWeek = days[date.getDay()];
+    const day = ("0" + date.getDate()).slice(-2);
+    const month = ("0" + (date.getMonth() + 1)).slice(-2);
+    return `${dayOfWeek}${day}/${month}`;
+  }
+  
+  /**
+   * Create a new sheet and return it
+   */
+  function createDaySheet(ss, sheetName) {
+    let sheet = ss.insertSheet(sheetName);
+    return sheet;
+  }
+  
+  /**
+   * Apply styling to the sheet: header, font size, alternating row colors
+   */
+  function applySheetStyles(sheet, numColumns, numRows) {
+    // Set font size for the entire sheet
+    sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).setFontSize(14);
+  
+    // Style header: dark green background, white bold text
+    let headerRange = sheet.getRange(1, 1, 1, numColumns);
+    headerRange.setBackground("#0B6623").setFontColor("white").setFontWeight("bold");
+  
+    // Apply alternating row colors (light green for every other row)
+    for (let i = 0; i < numRows; i++) {
+      if (i % 2 === 0) {
+        sheet.getRange(i + 2, 1, 1, numColumns).setBackground("#DFF2BF"); // Light green
+      }
     }
   }
-}
-
+  
+  
