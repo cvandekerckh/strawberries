@@ -26,7 +26,7 @@ function sendConfirmationEmails(){
         var jour = Utilities.formatDate(data[i][colJour], Session.getScriptTimeZone(), "dd/MM/yyyy");
 
         // Vérifier si le mail doit être envoyé
-        if ((statut === "Validée" || statut === "Refusée") && mailEnvoye === "A envoyer automatiquement" && email!=="") {
+        if ((statut === "Validée" || statut === "Refusée") && mailEnvoye === "" && email!=="") {
             var sujet = "";
             var message = "";
             var produitsCommandes = [];
