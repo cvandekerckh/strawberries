@@ -41,7 +41,7 @@ function sendConfirmationEmails(){
 
             if (statut === "Validée") {
                 sujet = "Validation de votre commande pour le " + jour + "."
-                message = "Bonjour,\n\nNous avons le plaisir de vous informer que votre commande pour le " + jour + " a été validée. Voici un récapitulatif de votre commande :\n" + produitsCommandes +"\n\nCordialement,\nLa ferme des grands prés";
+                message = "Bonjour,\n\nNous avons le plaisir de vous informer que votre commande pour le " + jour + " a été validée. Voici un récapitulatif de votre commande :\n" + produitsCommandes.join("") +"\n\nCordialement,\nLa ferme des grands prés";
             } else if (statut === "Refusée") {
                 sujet = "Refus de votre commande pour le " + jour + "."
                 message = "Bonjour,\n\nNous sommes désolés de vous informer que votre commande pour le " + jour + " a été refusée car nous n'avons pas assez de production en ce moment.\n\nCordialement,\nLa ferme des grands prés";
