@@ -44,20 +44,28 @@ function sendConfirmationEmails(){
               if (statut === "Validée") {
                   sujet = "Validation de votre commande pour le " + jour + "."
                   message = "Bonjour,\n\nNous avons le plaisir de vous informer que votre commande pour le " + jour + " a été validée. Voici un récapitulatif de votre commande :\n" + produitsCommandes.join("") +"\n\nCordialement,\nLa ferme des grands prés";
-              } else if (statut === "Refusée" && mailEnvoye === "") {
-                  sujet = "Refus de votre commande pour le " + jour + "."
-                  message = getMessageFromDoc("message_refus_global", { jour: jour, lien: lienclic });
-              } else if (statut === "Refusée" && mailEnvoye === "A envoyer personnalisé") {
+                  // Envoyer l'email
+                  MailApp.sendEmail({
+                    to: email,
+                    subject: sujet,
+                    body: message
+                  });
+              } else if (statut === "Refusée") {
+                  if (mailEnvoye === "") {
+                    sujet = "Refus de votre commande pour le " + jour + "."
+                    message = getMessageFromDoc("message_refus_global", { jour: jour, lien: lienclic });
+                  } else if (mailEnvoye === "A envoyer personnalisé") {
                   sujet = "Refus de votre commande pour le " + jour + "."
                   message = getMessageFromDoc("message_refus_personnalise", { jour: jour, lien: lienclic });
+                  }
+                  // Envoyer l'email
+                  MailApp.sendEmail({
+                    to: email,
+                    subject: sujet,
+                    htmlBody: message
+                  });
               }
   
-              // Envoyer l'email
-              MailApp.sendEmail({
-                to: email,
-                subject: sujet,
-                htmlBody: message
-              });
               emailsEnvoyes++;
   
               // Mettre à jour la colonne "Mail envoyé"
