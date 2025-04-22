@@ -28,7 +28,7 @@ function sendConfirmationEmails(){
         var lienclic = '<a href="' + lien + '">page de réservation</a>';
 
         // Vérifier si le mail doit être envoyé
-        if ((statut === "Validée" || statut === "Refusée général" || statut === "Refusée perso") && (mailEnvoye === "") && email!=="") {
+        if ((statut === "Validée" || statut === "Refusée général" || statut === "Refusée fraises" || statut === "Refusée asperges") && (mailEnvoye === "") && email!=="") {
             var sujet = "";
             var message = "";
             var produitsCommandes = [];
@@ -54,9 +54,12 @@ function sendConfirmationEmails(){
                 if (statut === "Refusée général") {
                   sujet = "Refus de votre commande pour le " + jour + "."
                   message = getMessageFromDoc("message_refus_global", { jour: jour, lien: lienclic });
-                } else if (statut === "Refusée perso") {
+                } else if (statut === "Refusée fraises") {
                 sujet = "Refus de votre commande pour le " + jour + "."
-                message = getMessageFromDoc("message_refus_personnalise", { jour: jour, lien: lienclic });
+                message = getMessageFromDoc("message_refus_fraises", { jour: jour, lien: lienclic });
+                } else if (statut === "Refusée asperges") {
+                sujet = "Refus de votre commande pour le " + jour + "."
+                message = getMessageFromDoc("message_refus_asperges", { jour: jour, lien: lienclic });
                 }
                 // Envoyer l'email
                 MailApp.sendEmail({
